@@ -1,0 +1,32 @@
+---
+title: "Regressão e Romance"
+author: "Gabriel Morais Lúcio de Araújo"
+date: "26 de julho de 2018"
+output:
+  html_document:
+    code_folding: show
+    theme: flatly
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(plotly)
+```
+
+```{r message=FALSE}
+dados = read_csv(here("../dados/speed-dating.csv"))
+```
+
+```{r}
+dados %>% 
+    filter(!is.na(fun)) %>%
+    filter(!is.na(like)) %>%
+    ggplot(aes(x = fun, y = like, color = like)) + 
+    geom_count()
+```
+
