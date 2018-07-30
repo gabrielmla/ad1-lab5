@@ -15,18 +15,149 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(here)
+library(viridis)
+library(broom)
+library(modelr)
 library(plotly)
+library(GGally)
+library(caret)
+library(knitr)
 ```
 
+Neste relatório será abordado o assunto **Regressão Linear**. Serão utilizados dados sobre que atributos pessoas se interessam em encontro relâmpagos.
+
+## Dados
+
+Temos dados descrevendo 5000 encontros relâmpagos (speed dating) de 4 minutos envolvendo 310 jovens americanos. Os dados originais foram coletados por professores da Columbia Business School [no experimento descrito aqui](http://faculty.chicagobooth.edu/emir.kamenica/documents/genderDifferences.pdf).
+
 ```{r message=FALSE}
-dados = read_csv(here("../dados/speed-dating.csv"))
+dados <- read_csv(here("dados/speed-dating.csv"),
+                 progress = FALSE,
+                 col_types =cols(.default = col_integer(),
+                                 int_corr = col_double(),
+                                 field = col_character(),
+                                 from = col_character(),
+                                 career = col_character(),
+                                 attr = col_double(),
+                                 samerace = col_character(),
+                                 sinc = col_double(),
+                                 intel = col_double(),
+                                 fun = col_double(),
+                                 amb = col_double(),
+                                 shar = col_double(),
+                                 like = col_double(),
+                                 prob = col_double(),
+                                 match_es = col_double(),
+                                 attr3_s = col_double(),
+                                 sinc3_s = col_double(),
+                                 intel3_s = col_double(),
+                                 fun3_s = col_double(),
+                                 amb3_s = col_double())) %>%
+  mutate(from = as.numeric(factor(from)),
+         gender = as.numeric(factor(gender)),
+         samerace = as.numeric(factor(samerace)))
 ```
+
+## As variáveis
+
+- iid : id do participante p1 no encontro
+- gender : sexo do p1, 0 = mulher
+- order : dos vários encontros realizados em uma noite, esse foi o n-ésimo, segundo essa variável
+- pid : id do participante p2
+- int_corr : correlação entre os interesses de p1 e p2
+- samerace : p1 e p2 são da mesma raça?
+- age_o : idade de p2
+- age : idade de p1
+- field : campo de estudo de p1
+- race : raça de p1. O código é Black/African American=1; European/Caucasian-American=2; Latino/Hispanic American=3; Asian/Pacific Islander/Asian-American=4;	Native American=5; 	Other=6
+- from : de onde p1 é
+- career : que carreira p1 quer seguir
+- sports, tvsports, exercise, dining, museums, art, hiking, gaming, clubbing, reading, tv, theater, movies, concerts, music, shopping, yoga : De 1 a 10, quão interessado p1 é em cada uma dessas atividades.  
+- attr : quão atraente p1 achou p2
+- sinc : quão sincero p1 achou p2
+- intel : quão inteligente p1 achou p2    
+- fun : quão divertido p1 achou p2
+- amb : quão ambicioso p1 achou p2
+- shar : quanto p1 achou que compartilha interesses e hobbies com p2
+- like : no geral, quanto p1 gostou de p2?
+- prob : que probabiliade p1 acha que p2 tem de querer se encontrar novamente com p- (escala 1-10)
+- attr3_s : quanto p1 acha que é atraente
+- sinc3_s : quanto p1 acha que é sincero
+- intel3_s : quanto p1 acha que é inteligente
+- fun3_s : quanto p1 acha que é divertido
+- amb3_s : quanto p1 acha que é ambicioso
+
+Aqui uma amostra de algumas variáveis presentes nos dados:
+```{r}
+head = dados %>%
+  select(gender, age, field, race, fun, intel, amb, sports, shar, like) %>%
+  head()
+
+kable(head)
+```
+
+## Explorando Variáveis
+```{r}
+dados %>%
+  na.omit(fun) %>%
+  ggplot(aes(fun, ..prop..)) +
+  geom_bar(color = "black",
+           fill = "darkorchid2") +
+  labs(x= "Divertido (fun)",
+       y = "Frequência Relativa")
+```
+```{r}
+dados %>%
+  na.omit(intel) %>%
+  ggplot(aes(intel, ..prop..)) +
+  geom_bar(color = "black",
+           fill = "azure2") +
+  labs(x= "Inteligênia (intel)",
+       y = "Frequência Relativa")
+```
+```{r}
+dados %>%
+  na.omit(attr) %>%
+  ggplot(aes(attr, ..prop..)) +
+  geom_bar(color = "black",
+           fill = "darkolivegreen2") +
+  labs(x= "Aparência (attr)",
+       y = "Frequência Relativa")
+```
+```{r}
+dados %>%
+  na.omit(amb) %>%
+  ggplot(aes(amb, ..prop..)) +
+  geom_bar(color = "black",
+           fill = "gold2") +
+  labs(x= "Aparência (amb)",
+       y = "Frequência Relativa")
+```
+
+## A Pergunta
 
 ```{r}
 dados %>% 
     filter(!is.na(fun)) %>%
     filter(!is.na(like)) %>%
     ggplot(aes(x = fun, y = like, color = like)) + 
+  geom_smooth(method=lm) +
     geom_count()
+```
+
+```{r}
+modelo = lm(like ~ fun, data = dados)
+
+glance(modelo)
+```
+
+```{r}
+dados %>% 
+    add_predictions(model = modelo) %>% 
+    ggplot(aes(x = like, y = fun)) + 
+    geom_count() +
+    geom_smooth(method=lm) +
+    xlim(0,10) +
+    NULL
 ```
 
