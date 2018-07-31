@@ -1,7 +1,7 @@
 ---
 title: "Regressão e Romance"
 author: "Gabriel Morais Lúcio de Araújo"
-date: "26 de julho de 2018"
+date: "31 de julho de 2018"
 output:
   html_document:
     code_folding: show
@@ -97,6 +97,11 @@ kable(head)
 ```
 
 ## Explorando Variáveis
+
+Primeiramente vamos conhecer melhor os dados, uma boa maneira de fazer isso é explorar as variáveis e tirar algumas conclusões antes da análise mais profunda que faremos a seguir. Vamos lá!
+
+### Variáveis
+
 ```{r}
 dados %>%
   na.omit(fun) %>%
@@ -106,6 +111,8 @@ dados %>%
   labs(x= "Divertido (fun)",
        y = "Frequência Relativa")
 ```
+- Divertido (fun): P1 da notas entre 6 e 7 para P2, na maioria das vezes, para o atributo divertido.
+
 ```{r}
 dados %>%
   na.omit(intel) %>%
@@ -115,6 +122,8 @@ dados %>%
   labs(x= "Inteligênia (intel)",
        y = "Frequência Relativa")
 ```
+- Inteligência (intel): P1 da notas entre 7 e 8 para P2, na maioria das vezes, para o atributo inteligência.
+
 ```{r}
 dados %>%
   na.omit(attr) %>%
@@ -124,40 +133,165 @@ dados %>%
   labs(x= "Aparência (attr)",
        y = "Frequência Relativa")
 ```
+- Aparência (attr): P1 da notas entre 5 e 7 para P2, na maioria das vezes, para o atributo aparência.
+
 ```{r}
 dados %>%
   na.omit(amb) %>%
   ggplot(aes(amb, ..prop..)) +
   geom_bar(color = "black",
            fill = "gold2") +
-  labs(x= "Aparência (amb)",
+  labs(x= "Ambição (amb)",
        y = "Frequência Relativa")
 ```
+- Ambição (amb): P1 da notas entre 6 e 8 para P2, na maioria das vezes, para o atributo ambição.
 
-## A Pergunta
+<br>
+
+- Geral: No geral foi possível observar que P1 geralmente acha P2 inteligente, porém nem sempre acha P2 atraente.
+
+## Correlação entre as variáveis
+
+Uma boa forma de encontrar um bom preditor para as variáveis é analisar as correlações entre elas nos dados, para isso vamos analisar o *corrplot* (gráfico de correlação) abaixo.
 
 ```{r}
 dados %>% 
-    filter(!is.na(fun)) %>%
-    filter(!is.na(like)) %>%
-    ggplot(aes(x = fun, y = like, color = like)) + 
+  select(like,fun,amb,attr,
+         sinc,intel,shar,prob,
+         fun3_s,amb3_s,attr3_s,
+         sinc3_s,intel3_s,samerace,
+         gender,from) %>% 
+  na.omit() %>%
+  ggcorr(palette = "Spectral", label = TRUE,
+       hjust = 0.75, label_size = 3, nbreaks = 5) +
+  ggtitle("Correlação entre variáveis escolhidas")
+```
+<br>
+Com esse *corrplot* podemos notar algumas coisas:
+
+- Dentre as variáveis que descrevem o que P1 acha de P2 (fun, amb, attr, sinc, intel, shar, prob), a variável ambição (amb) tem a menor correlação com *like*. Ou seja, você ser muito ambicioso não aumenta as notas recebedas nos likes dos speed-dates coletados.
+- Dentre as variáveis que descrevem o que P1 acha de P2, as variáveis divertido (fun), aparência (attr) e aberto (shar) são as que possuem maior correlação com o *like*.
+- Podemos ver também que inteligência (intel) possui correlações fortes com sinceridade (sinc) e ambição (amb).
+
+## Analisando o relacionamento das variáveis *fun* e *attr* com *like*
+
+```{r}
+dados %>% 
+  select(fun, like) %>%
+  na.omit() %>%
+  ggplot(aes(x = fun, y = like, color = like)) + 
   geom_smooth(method=lm) +
-    geom_count()
+  geom_count() + 
+  labs(x= "Divertido (fun)",
+       y = "Like")
 ```
-
-```{r}
-modelo = lm(like ~ fun, data = dados)
-
-glance(modelo)
-```
-
+<br>
 ```{r}
 dados %>% 
-    add_predictions(model = modelo) %>% 
-    ggplot(aes(x = like, y = fun)) + 
-    geom_count() +
-    geom_smooth(method=lm) +
-    xlim(0,10) +
-    NULL
+  select(attr, like) %>%
+  na.omit() %>%
+  ggplot(aes(x = attr, y = like, color = like)) + 
+  geom_smooth(method=lm) +
+  geom_count() +
+  labs(x= "Aparência (attr)",
+       y = "Like")
+```
+<br>
+Como previsto pelo *corrplot*, as variáveis divertido (fun) e aparência (attr) realmente possuem uma boa correlação linear com like.
+
+## Validação cruzada
+
+A validação cruzada é uma técnica para avaliar a capacidade de generalização de um modelo, a partir de um conjunto de dados. Vamos usala para validar nosso modelo de regressão que será criado. Nesta análise vamos dividir os dados em treino e teste, divididos de forma aleatória.
+
+```{r}
+dados.mesma.escala = dados %>%  # apenas as variaveis de maior impacto com a variavel resposta (like)
+  select(fun, prob, order, amb, attr, sinc, prob, shar, intel, like, gender, samerace) %>%
+  na.omit() %>%
+  mutate_at(.vars = vars(fun, prob, order,attr, sinc, prob, shar,intel),
+             .funs = funs(as.numeric(scale(.))))
+
+set.seed(101)
+dados.mesma.escala$id <- 1:nrow(dados.mesma.escala)
+
+treino = dados.mesma.escala %>% sample_frac(.8)
+teste = anti_join(dados.mesma.escala, treino, by = 'id')
 ```
 
+#### Modelo de regressão linear
+
+Para nosso modelo de regressão vamos treiná-lo, utilizando os dados de treino, observando e ajustando R². Quando ele estiver bom o suficiente (analisando resíduos) vamos aplicá-lo nos dados de teste para validar o modelo (com a validação cruzada). Lembrando que nossa variável resposta para esta análise é o atributo **like**.
+
+## Pergunta
+
+- **Como o atributo divertido (fun) impacta em quanto P1 gosta de P2 (like)?**
+
+## Análise
+
+No nosso modelo iremos usar as variáveis de maior correlação com like, observadas anteriomente. Irei utilizar um alpha = 0.05 (nível de confiança).
+
+```{r}
+modelo <- lm(like ~ fun + attr + shar + sinc + prob + intel + amb, data = treino)
+
+glance(modelo) 
+``` 
+
+Obtemos um R² e um R² ajustado de 0.67, o que significa que nosso modelo explica 67% da variável resposta, like.
+
+```{r}
+tidy(modelo, 
+     conf.int = TRUE, 
+     conf.level = 0.95)
+```
+
+O modelo retornou um intercept positivo, com valores por volta de 6. Ou seja, de acordo com nosso modelo, P1 ira dar um like de 6 para P2. Vamos ver agora quais variáveis realmente possuem um impacto na nossa variável resposta.
+
+```{r}
+tidy(modelo, 
+     conf.int = TRUE, 
+     conf.level = 0.95)  %>%
+  filter(term != "(Intercept)") %>%
+  ggplot(aes(term, estimate, ymin = conf.low, ymax = conf.high)) +
+  geom_errorbar(size = 0.8, width= 0.4) +
+  geom_point(color = "pink", size = 2) +
+  geom_hline(yintercept = 0, colour = "darkred") +
+  labs(x = "Variável preditora",
+       y = "Valor estimado (95% de confiança)")
+```
+<br>
+Podemos dizer então que com 95% de confiança, as variáveis *attr, fun, intel, prob, shar e sinc* são relevantes, mais especificamente possuem um impacto positivo na nota do like. Já a variável *amb* não é, pois esta cruzando o 0 (mesmo que seja muito pouco, prefiro assumir que ela não é relevante). Sobre os atributos mais relevantes, podemos ver claramente que *attr* é o atributo mais relevante (aparência importa bastante), seguido pelos atributos *fun* e *shar*.
+
+### Resíduos
+
+```{r}
+resid_data <- data.frame(resid(modelo), rstandard(modelo), treino$like, stringsAsFactors=FALSE)
+
+resid_data %>%
+  ggplot(aes(treino$like, resid(modelo))) +
+  geom_point(alpha = 0.4) +
+  geom_hline(yintercept = 0,
+             color = "red") +
+  labs(x = "Variável resposta (like)", y = "Resíduos")
+```
+<br>
+É observado que os pontos não estão espalhados pelo gráfico, nem estão concentrados no meio. Também podemos notar que os pontos não seguem um padrão muito forte. Vendo esses resíduos diz que nosso modelo não se encaixa super bem nos dados, mas ele também não é ruim e parece explicar uma porção da variável resposta.
+
+### Predição (validação cruzada)
+
+```{r}
+predicoes <- modelo %>% predict(teste)
+
+data.frame( R2 = caret::R2(predicoes, teste$like),
+            RMSE = caret::RMSE(predicoes, teste$like),
+            ERR = caret::RMSE(predicoes, teste$like)/
+              mean(teste$like))
+```
+
+Obtemos um R² de 0.65, o que significa que nosso modelo explica 65% da variável respost para os dados de teste. A diferência média entre os valores resultados conhecidos e os retornados pela predição foi de 1.100048, que significa que nossa margem de erro foi de 1.1%, aproximadamente. Ou seja, se P1 desse uma nota de 8 para P2, nosso modelo iria predizer que a nota seria 6.9 ou 9.1. Nossa taxa de erro de predição (ERR) foi de 0.18, o que é um pouco alta.
+
+Nosso modelo realmente não está muito bom, existem partes a ser melhoradas para um ganho no acerto das predições.
+
+### Resposta para nossa pergunta
+
+- **Como o atributo divertido (fun) impacta em quanto P1 gosta de P2 (like)?**
+
+Com 95% de significância podemos dizer que fun é relevante para o modelo, ficando apenas atrás de attr e que fun teve um impacto positivo no like recebido pelos participantes.
